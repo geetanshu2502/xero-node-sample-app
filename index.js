@@ -4,6 +4,17 @@ const express = require('express');
 const session = require('express-session');
 const XeroClient = require('xero-node').AccountingAPIClient;;
 const exphbs = require('express-handlebars');
+const logger = require('morgan')
+const bodyParser = require('body-parser')
+const keys = require('./config/keys.js')
+const drone = require('./config/drone.js')
+const SDK = require('ringcentral')
+const rcsdk = new SDK({
+    server: keys.ringCentral.server,
+    appKey: keys.ringCentral.appKey,
+    appSecret: keys.ringCentral.appSecret,
+    redirectUri: '' // optional, but is required for Implicit Grant and Authorization Code OAuth Flows (see below)
+});
 
 var app = express();
 
@@ -60,8 +71,10 @@ app.engine('handlebars', exbhbsEngine.engine);
 app.set('view engine', 'handlebars');
 app.set('views', __dirname + '/views');
 
-app.use(express.logger());
-app.use(express.bodyParser());
+app.use(logger('combined'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+// app.use(express.bodyParser());
 
 app.set('trust proxy', 1);
 app.use(session({
@@ -92,13 +105,15 @@ function getXeroClient(session) {
     return new XeroClient(config, session);
 }
 
-async function authorizeRedirect(req, res, returnTo) {
+async function authorizeRedirect (req, res, returnTo) {
     var xeroClient = getXeroClient(req.session);
     let requestToken = await xeroClient.oauth1Client.getRequestToken();
 
     var authoriseUrl = xeroClient.oauth1Client.buildAuthoriseUrl(requestToken);
     req.session.oauthRequestToken = requestToken;
     req.session.returnTo = returnTo;
+    console.log("RETURN TO " + returnTo)
+    console.log("URL" + authoriseUrl)
     res.redirect(authoriseUrl);
 }
 
@@ -144,7 +159,8 @@ app.get('/access', async function(req, res) {
     req.session.accessToken = accessToken;
 
     var returnTo = req.session.returnTo;
-    res.redirect(returnTo || '/');
+    console.log(returnTo)
+    res.redirect(  returnTo || '/' );
 });
 
 app.get('/organisations', async function(req, res) {
@@ -545,6 +561,70 @@ app.use('/createinvoice', async function(req, res) {
         }
     }
 });
+
+app.post('/mail', function(req, res){
+    var mail = req.body.mail
+    const sgMail = require('@sendgrid/mail');
+    sgMail.setApiKey(keys.sendGrid.apiKey);
+    const id = drone.drone.id
+    const name = drone.drone.name
+    const latitude = drone.drone.latitude
+    const longitude = drone.drone.longitude
+    const status= drone.drone.status
+    const on_off= drone.drone.on_off
+    const temp = drone.drone.temp
+    const contactPerson = drone.drone.contactPerson
+    const data =  "<p><ol><li><strong>ID : </strong>" + id +
+               "</li><li><strong>Name : </strong>" + name +
+               "</li><li><strong>Latitude : </strong>" + latitude +
+               "</li><li><strong>Longitude : </strong>" + longitude +
+               "</li><li><strong>Status : </strong>" + status +
+               "</li><li><strong>ON/OFF : </strong>" + on_off +
+               "</li><li><strong>Temperature : </strong>" + temp +
+               "</li><li><strong>Contact Person : </strong>" + contactPerson +
+               "</li></ol></p>"
+    const msg = {
+        to:  mail || 'geetanshu2502@gmail.com',
+        from: 'test@example.com',
+        subject: 'Details of Drone (Test Mail)',
+        html: data,
+    };
+    sgMail.send(msg);
+    console.log("Mail has been sent!!");
+    res.redirect('/')
+})
+
+app.post('/sms', function(req, res){
+    var phone = req.body.phone
+    rcsdk.platform().login({
+        username: keys.ringCentral.user, // phone number in full format
+        extension: keys.ringCentral.extension, // leave blank if direct number is used
+        password: keys.ringCentral.password
+    })
+    .then(function(response) {
+          // your code here
+          rcsdk.platform().post('/account/~/extension/~/sms', {
+              from: {phoneNumber:'+14242136813'}, // Your sms-enabled phone number
+              to: [
+                  {phoneNumber:phone} // Second party's phone number
+              ],
+              text: 'Hello, World!'
+          })
+          .then(function(response) {
+              console.log(phone)
+              console.log('Message has been sent!')
+          })
+          .catch(function(e) {
+              console.log(e)
+              console.log('There was an error!Please try again!')
+          });
+    })
+    .catch(function(e) {
+        alert(e.message  || 'Server cannot authorize user');
+    });
+
+    res.redirect('/')
+})
 
 app.use(function(req, res, next) {
     if (req.session)
