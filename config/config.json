@@ -2,5 +2,5 @@
   "appType" : "public",
   "consumerKey": "R0HLFEP382EAABGXNZ6ASAEBQPNIQL",
   "consumerSecret": "7AZLVSHEUPZ8AE3H5TMGTPUXYGLBRI",
-  "callbackUrl": "http://https://limitless-falls-78496.herokuapp.com//access"
+  "callbackUrl": "https://limitless-falls-78496.herokuapp.com/access"
 }
