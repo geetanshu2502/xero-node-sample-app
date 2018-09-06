@@ -634,4 +634,4 @@ app.use(function(req, res, next) {
 var PORT = process.env.PORT || 3100;
 
 app.listen(PORT);
-// console.log("listening on http://localhost:" + PORT);
+console.log("listening on http://localhost:" + PORT);
